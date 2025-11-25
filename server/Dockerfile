@@ -1,5 +1,5 @@
 # 1. On part d'une image Node
-FROM node:18-alpine
+FROM node:20-alpine
 
 # 2. On crée le dossier de travail
 WORKDIR /app
