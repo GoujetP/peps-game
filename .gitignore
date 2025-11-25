@@ -1,0 +1,13 @@
+# Dépendances (lourdes, à réinstaller par Jenkins)
+node_modules/
+**/node_modules/
+
+# Builds (générés par Jenkins, pas par toi)
+dist/
+**/dist/
+
+# Environnement (secrets, ne jamais envoyer !)
+.env
+.DS_Store
+.idea/
+.vscode/
