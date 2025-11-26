@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(uuid()) // UUID pour sécurité
+  email     String   @unique
+  password  String   // Hashé bien sûr
+  username  String
+  avatar    String?
+
+  role      GlobalRole @default(USER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hostedGames Game[]   @relation("GameHost") // Les parties qu'il a créées
+  playlists   Playlist[] // Ses playlists perso
+}
+
+// 2. PARTIE (Session de jeu)
+model Game {
+  id        String     @id @default(uuid())
+  joinCode  String     @unique // Code court (ex: "ABCD") pour rejoindre
+  status    GameStatus @default(WAITING)
+  
+  // Configuration de la partie
+  maxPlayers Int      @default(8)
+  currentRound Int    @default(0)
+  totalRounds  Int    @default(10)
+
+  // Qui est l'organisateur (Game Admin) ?
+  hostId    String
+  host      User       @relation("GameHost", fields: [hostId], references: [id])
+
+  // Quelle playlist on joue ?
+  playlistId String?
+  playlist   Playlist? @relation(fields: [playlistId], references: [id])
+
+  // Les joueurs dans cette partie (Invités + Host)
+  players   Player[]
+
+  createdAt DateTime @default(now())
+}
+
+model Player {
+  id        String   @id @default(uuid())
+  nickname  String   // Pseudo choisi pour la partie
+  score     Int      @default(0)
+  socketId  String?  // ID de connexion Socket.io (pour virer le joueur en temps réel)
+  isHost    Boolean  @default(false)
+
+  gameId    String
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model Playlist {
+  id        String   @id @default(uuid())
+  name      String
+  isPublic  Boolean  @default(false) // Si true, tout le monde peut l'utiliser
+  tracks    Json     
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  games     Game[]
+}
+
+
+enum GlobalRole {
+  USER
+  ADMIN
+}
+
+enum GameStatus {
+  WAITING
+  PLAYING
+  FINISHED
+}
