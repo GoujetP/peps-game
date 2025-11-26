@@ -22,7 +22,7 @@ pipeline {
 
     tools {
         // On charge l'outil qu'on a configuré dans Jenkins
-        jdk 'jdk17' // SonarScanner a besoin de Java. Si tu n'as pas config de JDK, commente cette ligne, il utilisera celui du système.
+        // jdk 'jdk17' // SonarScanner a besoin de Java. Si tu n'as pas config de JDK, commente cette ligne, il utilisera celui du système.
         scanner 'sonar-scanner' 
     }
 
