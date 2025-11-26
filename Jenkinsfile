@@ -14,9 +14,50 @@ pipeline {
         // Ports exposés sur le VPS
         SERVER_PORT = "3000"
         CLIENT_PORT = "80"
+
+        SONAR_ORG = "sonarqube-goujetp"
+        SONAR_PROJECT_KEY_SERVER = "peps-game-backend"
+        SONAR_PROJECT_KEY_CLIENT = "peps-game-frontend"
+    }
+
+    tools {
+        // On charge l'outil qu'on a configuré dans Jenkins
+        jdk 'jdk17' // SonarScanner a besoin de Java. Si tu n'as pas config de JDK, commente cette ligne, il utilisera celui du système.
+        scanner 'sonar-scanner' 
     }
 
     stages {
+        // --------------------------------------------------------
+        // ANALYSE DU BACKEND (SERVER)
+        // --------------------------------------------------------
+        stage('SonarQube Analysis - Server') {
+            steps {
+                script {
+                    // On utilise le bloc withSonarQubeEnv pour injecter le token
+                    withSonarQubeEnv('SonarCloud') {
+                        sh """
+                            sonar-scanner \
+                            -Dsonar.organization=${SONAR_ORG} \
+                            -Dsonar.projectKey=${SONAR_PROJECT_KEY_SERVER} \
+                            -Dsonar.sources=server \
+                            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.spec.ts \
+                            -Dsonar.tests=server \
+                            -Dsonar.test.inclusions=**/*.spec.ts \
+                            -Dsonar.javascript.lcov.reportPaths=server/coverage/lcov.info
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate - Server') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    // Si le code est pourri, le pipeline S'ARRETE ici (abortPipeline: true)
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
         // --- ETAPE 1 : BUILD DU BACKEND (NestJS) ---
         stage('Build Backend') {
             steps {
@@ -46,6 +87,29 @@ pipeline {
                         -p ${SERVER_PORT}:3000 \
                         ${SERVER_IMAGE}
                     """
+                }
+            }
+        }
+        stage('SonarQube Analysis - Client') {
+            steps {
+                withSonarQubeEnv('SonarCloud') {
+                    sh """
+                        sonar-scanner \
+                        -Dsonar.organization=${SONAR_ORG} \
+                        -Dsonar.projectKey=${SONAR_PROJECT_KEY_CLIENT} \
+                        -Dsonar.sources=client \
+                        -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.spec.ts,**/environment*.ts \
+                        -Dsonar.tests=client \
+                        -Dsonar.test.inclusions=**/*.spec.ts
+                    """
+                }
+            }
+        }
+
+        stage('Quality Gate - Client') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
