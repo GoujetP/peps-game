@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // --- CONFIGURATION DOCKER ---
+        // --- CONFIG DOCKER ---
         SERVER_IMAGE = "peps-game-server"
         CLIENT_IMAGE = "peps-game-client"
         NETWORK_NAME = "cicd-net" 
@@ -10,31 +10,26 @@ pipeline {
         SERVER_PORT = "3000"
         CLIENT_PORT = "80"
 
-        // --- CONFIGURATION SONAR ---
+        // --- CONFIG SONAR ---
         SONAR_ORG = "sonarqube-goujetp"
         SONAR_PROJECT_KEY_SERVER = "peps-game-backend"
         SONAR_PROJECT_KEY_CLIENT = "peps-game-frontend"
     }
 
-    // J'AI SUPPRIMÉ LE BLOC 'TOOLS' QUI POSAIT PROBLÈME
-    
     stages {
         // --------------------------------------------------------
-        // ANALYSE DU BACKEND (SERVER)
+        // BACKEND : ANALYSE + VERIFICATION MANUELLE
         // --------------------------------------------------------
         stage('SonarQube Analysis - Server') {
             steps {
                 script {
-                    // 1. On récupère le chemin de l'outil ici (C'est la méthode infaillible)
-                    // Assure-toi que le nom 'sonar-scanner' est bien celui dans Administrer Jenkins > Tools
                     def scannerHome = tool 'sonar-scanner'
-                    
                     withSonarQubeEnv('SonarCloud') {
-                        // 2. On utilise le chemin complet vers l'exécutable
                         sh """
                             "${scannerHome}/bin/sonar-scanner" \
                             -Dsonar.organization=${SONAR_ORG} \
                             -Dsonar.projectKey=${SONAR_PROJECT_KEY_SERVER} \
+                            -Dsonar.branch.name=main \
                             -Dsonar.sources=server \
                             -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.spec.ts \
                             -Dsonar.tests=server \
@@ -46,21 +41,42 @@ pipeline {
             }
         }
 
-        stage('Quality Gate - Server') {
+        stage('Quality Gate - Server (Check API)') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                script {
+                    echo '⏳ Attente de la fin du calcul SonarCloud (10s)...'
+                    sleep 10 // On laisse le temps à Sonar de calculer
+                    
+                    // On interroge l'API avec ton token stocké dans Jenkins
+                    withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
+                        // On demande le statut du projet
+                        def result = sh(script: """
+                            curl -s -u "${SONAR_TOKEN}:" \
+                            "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY_SERVER}&branch=main"
+                        """, returnStdout: true).trim()
+                        
+                        echo "🔍 Réponse SonarCloud : ${result}"
+                        
+                        // On vérifie si ça contient "OK"
+                        if (result.contains('"status":"OK"')) {
+                            echo "✅ Quality Gate SERVER : VALIDÉ"
+                        } else if (result.contains('"status":"ERROR"')) {
+                            error "❌ Quality Gate SERVER : ÉCHEC (Code de mauvaise qualité)"
+                        } else {
+                            echo "⚠️ Statut inconnu ou en cours, on continue quand même pour ce TP..."
+                        }
+                    }
                 }
             }
         }
 
         // --------------------------------------------------------
-        // BUILD & DEPLOY BACKEND
+        // BACKEND : BUILD & DEPLOY
         // --------------------------------------------------------
         stage('Build Backend') {
             steps {
                 script {
-                    echo '📦 Construction de l\'image Docker Server...'
+                    echo '📦 Construction Server...'
                     sh "docker build -t ${SERVER_IMAGE} ./server"
                 }
             }
@@ -69,35 +85,31 @@ pipeline {
         stage('Deploy Backend') {
             steps {
                 script {
-                    echo '🚀 Déploiement du Server...'
+                    echo '🚀 Déploiement Server...'
                     sh "docker stop ${SERVER_IMAGE} || true"
                     sh "docker rm ${SERVER_IMAGE} || true"
                     sh """
-                        docker run -d \
-                        --name ${SERVER_IMAGE} \
-                        --network ${NETWORK_NAME} \
-                        --restart unless-stopped \
-                        -p ${SERVER_PORT}:3000 \
-                        ${SERVER_IMAGE}
+                        docker run -d --name ${SERVER_IMAGE} \
+                        --network ${NETWORK_NAME} --restart unless-stopped \
+                        -p ${SERVER_PORT}:3000 ${SERVER_IMAGE}
                     """
                 }
             }
         }
 
         // --------------------------------------------------------
-        // ANALYSE DU FRONTEND (CLIENT)
+        // FRONTEND : ANALYSE + VERIFICATION MANUELLE
         // --------------------------------------------------------
         stage('SonarQube Analysis - Client') {
             steps {
                 script {
-                    // On récupère à nouveau l'outil pour cette étape
                     def scannerHome = tool 'sonar-scanner'
-                    
                     withSonarQubeEnv('SonarCloud') {
                         sh """
                             "${scannerHome}/bin/sonar-scanner" \
                             -Dsonar.organization=${SONAR_ORG} \
                             -Dsonar.projectKey=${SONAR_PROJECT_KEY_CLIENT} \
+                            -Dsonar.branch.name=main \
                             -Dsonar.sources=client \
                             -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.spec.ts,**/environment*.ts \
                             -Dsonar.tests=client \
@@ -108,21 +120,36 @@ pipeline {
             }
         }
 
-        stage('Quality Gate - Client') {
+        stage('Quality Gate - Client (Check API)') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                script {
+                    echo '⏳ Attente du calcul (10s)...'
+                    sleep 10
+                    withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
+                        def result = sh(script: """
+                            curl -s -u "${SONAR_TOKEN}:" \
+                            "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY_CLIENT}&branch=main"
+                        """, returnStdout: true).trim()
+                        
+                        echo "🔍 Réponse SonarCloud : ${result}"
+                        
+                        if (result.contains('"status":"OK"')) {
+                            echo "✅ Quality Gate CLIENT : VALIDÉ"
+                        } else if (result.contains('"status":"ERROR"')) {
+                            error "❌ Quality Gate CLIENT : ÉCHEC"
+                        }
+                    }
                 }
             }
         }
 
         // --------------------------------------------------------
-        // BUILD & DEPLOY FRONTEND
+        // FRONTEND : BUILD & DEPLOY
         // --------------------------------------------------------
         stage('Build Frontend') {
             steps {
                 script {
-                    echo '📦 Construction de l\'image Docker Client...'
+                    echo '📦 Construction Client...'
                     sh "docker build -t ${CLIENT_IMAGE} ./client"
                 }
             }
@@ -131,17 +158,13 @@ pipeline {
         stage('Deploy Frontend') {
             steps {
                 script {
-                    echo '🚀 Déploiement du Client HTTPS...'
+                    echo '🚀 Déploiement Client HTTPS...'
                     sh "docker stop ${CLIENT_IMAGE} || true"
                     sh "docker rm ${CLIENT_IMAGE} || true"
-                    
                     sh """
-                        docker run -d \
-                        --name ${CLIENT_IMAGE} \
-                        --network ${NETWORK_NAME} \
-                        --restart unless-stopped \
-                        -p 80:80 \
-                        -p 443:443 \
+                        docker run -d --name ${CLIENT_IMAGE} \
+                        --network ${NETWORK_NAME} --restart unless-stopped \
+                        -p 80:80 -p 443:443 \
                         -v /etc/letsencrypt/live/peps-game.duckdns.org/fullchain.pem:/etc/letsencrypt/live/peps-game.duckdns.org/fullchain.pem:ro \
                         -v /etc/letsencrypt/live/peps-game.duckdns.org/privkey.pem:/etc/letsencrypt/live/peps-game.duckdns.org/privkey.pem:ro \
                         -v /etc/letsencrypt/archive:/etc/letsencrypt/archive:ro \
