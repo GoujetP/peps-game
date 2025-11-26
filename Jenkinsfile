@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // --- CONFIGURATION ---
+        // --- CONFIGURATION DOCKER ---
         SERVER_IMAGE = "peps-game-server"
         CLIENT_IMAGE = "peps-game-client"
         NETWORK_NAME = "cicd-net" 
@@ -10,20 +10,14 @@ pipeline {
         SERVER_PORT = "3000"
         CLIENT_PORT = "80"
 
-        // Tes identifiants SonarCloud
+        // --- CONFIGURATION SONAR ---
         SONAR_ORG = "sonarqube-goujetp"
         SONAR_PROJECT_KEY_SERVER = "peps-game-backend"
         SONAR_PROJECT_KEY_CLIENT = "peps-game-frontend"
     }
 
-    tools {
-        // --- CORRECTION ICI ---
-        // Le type d'outil s'appelle 'sonarScanner'
-        // Le nom entre cotes 'sonar-scanner' doit correspondre au nom donné dans :
-        // Administrer Jenkins > Tools > SonarQube Scanner installations
-        sonarScanner 'sonar-scanner' 
-    }
-
+    // J'AI SUPPRIMÉ LE BLOC 'TOOLS' QUI POSAIT PROBLÈME
+    
     stages {
         // --------------------------------------------------------
         // ANALYSE DU BACKEND (SERVER)
@@ -31,9 +25,14 @@ pipeline {
         stage('SonarQube Analysis - Server') {
             steps {
                 script {
+                    // 1. On récupère le chemin de l'outil ici (C'est la méthode infaillible)
+                    // Assure-toi que le nom 'sonar-scanner' est bien celui dans Administrer Jenkins > Tools
+                    def scannerHome = tool 'sonar-scanner'
+                    
                     withSonarQubeEnv('SonarCloud') {
+                        // 2. On utilise le chemin complet vers l'exécutable
                         sh """
-                            sonar-scanner \
+                            "${scannerHome}/bin/sonar-scanner" \
                             -Dsonar.organization=${SONAR_ORG} \
                             -Dsonar.projectKey=${SONAR_PROJECT_KEY_SERVER} \
                             -Dsonar.sources=server \
@@ -90,16 +89,21 @@ pipeline {
         // --------------------------------------------------------
         stage('SonarQube Analysis - Client') {
             steps {
-                withSonarQubeEnv('SonarCloud') {
-                    sh """
-                        sonar-scanner \
-                        -Dsonar.organization=${SONAR_ORG} \
-                        -Dsonar.projectKey=${SONAR_PROJECT_KEY_CLIENT} \
-                        -Dsonar.sources=client \
-                        -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.spec.ts,**/environment*.ts \
-                        -Dsonar.tests=client \
-                        -Dsonar.test.inclusions=**/*.spec.ts
-                    """
+                script {
+                    // On récupère à nouveau l'outil pour cette étape
+                    def scannerHome = tool 'sonar-scanner'
+                    
+                    withSonarQubeEnv('SonarCloud') {
+                        sh """
+                            "${scannerHome}/bin/sonar-scanner" \
+                            -Dsonar.organization=${SONAR_ORG} \
+                            -Dsonar.projectKey=${SONAR_PROJECT_KEY_CLIENT} \
+                            -Dsonar.sources=client \
+                            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.spec.ts,**/environment*.ts \
+                            -Dsonar.tests=client \
+                            -Dsonar.test.inclusions=**/*.spec.ts
+                        """
+                    }
                 }
             }
         }
@@ -131,7 +135,6 @@ pipeline {
                     sh "docker stop ${CLIENT_IMAGE} || true"
                     sh "docker rm ${CLIENT_IMAGE} || true"
                     
-                    // Assure-toi que les chemins SSL sont bons sur ton VPS
                     sh """
                         docker run -d \
                         --name ${CLIENT_IMAGE} \
