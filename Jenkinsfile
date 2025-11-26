@@ -3,27 +3,25 @@ pipeline {
 
     environment {
         // --- CONFIGURATION ---
-        // Noms des images Docker que nous allons créer
         SERVER_IMAGE = "peps-game-server"
         CLIENT_IMAGE = "peps-game-client"
-        
-        // Le réseau Docker créé lors de l'installation de Jenkins/Sonar
-        // Cela permet au Back de parler à la base de données si besoin
         NETWORK_NAME = "cicd-net" 
         
-        // Ports exposés sur le VPS
         SERVER_PORT = "3000"
         CLIENT_PORT = "80"
 
+        // Tes identifiants SonarCloud
         SONAR_ORG = "sonarqube-goujetp"
         SONAR_PROJECT_KEY_SERVER = "peps-game-backend"
         SONAR_PROJECT_KEY_CLIENT = "peps-game-frontend"
     }
 
     tools {
-        // On charge l'outil qu'on a configuré dans Jenkins
-        // jdk 'jdk17' // SonarScanner a besoin de Java. Si tu n'as pas config de JDK, commente cette ligne, il utilisera celui du système.
-        scanner 'sonar-scanner' 
+        // --- CORRECTION ICI ---
+        // Le type d'outil s'appelle 'sonarScanner'
+        // Le nom entre cotes 'sonar-scanner' doit correspondre au nom donné dans :
+        // Administrer Jenkins > Tools > SonarQube Scanner installations
+        sonarScanner 'sonar-scanner' 
     }
 
     stages {
@@ -33,7 +31,6 @@ pipeline {
         stage('SonarQube Analysis - Server') {
             steps {
                 script {
-                    // On utilise le bloc withSonarQubeEnv pour injecter le token
                     withSonarQubeEnv('SonarCloud') {
                         sh """
                             sonar-scanner \
@@ -53,32 +50,29 @@ pipeline {
         stage('Quality Gate - Server') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
-                    // Si le code est pourri, le pipeline S'ARRETE ici (abortPipeline: true)
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
-        // --- ETAPE 1 : BUILD DU BACKEND (NestJS) ---
+
+        // --------------------------------------------------------
+        // BUILD & DEPLOY BACKEND
+        // --------------------------------------------------------
         stage('Build Backend') {
             steps {
                 script {
                     echo '📦 Construction de l\'image Docker Server...'
-                    // On va dans le dossier server pour construire
                     sh "docker build -t ${SERVER_IMAGE} ./server"
                 }
             }
         }
 
-        // --- ETAPE 2 : DEPLOIEMENT DU BACKEND ---
         stage('Deploy Backend') {
             steps {
                 script {
                     echo '🚀 Déploiement du Server...'
-                    // 1. Arrêter le conteneur s'il tourne déjà (|| true évite l'erreur si c'est la 1ere fois)
                     sh "docker stop ${SERVER_IMAGE} || true"
-                    // 2. Supprimer l'ancien conteneur
                     sh "docker rm ${SERVER_IMAGE} || true"
-                    // 3. Lancer le nouveau
                     sh """
                         docker run -d \
                         --name ${SERVER_IMAGE} \
@@ -90,6 +84,10 @@ pipeline {
                 }
             }
         }
+
+        // --------------------------------------------------------
+        // ANALYSE DU FRONTEND (CLIENT)
+        // --------------------------------------------------------
         stage('SonarQube Analysis - Client') {
             steps {
                 withSonarQubeEnv('SonarCloud') {
@@ -114,7 +112,9 @@ pipeline {
             }
         }
 
-        // --- ETAPE 3 : BUILD DU FRONTEND (Angular) ---
+        // --------------------------------------------------------
+        // BUILD & DEPLOY FRONTEND
+        // --------------------------------------------------------
         stage('Build Frontend') {
             steps {
                 script {
@@ -124,7 +124,6 @@ pipeline {
             }
         }
 
-        // --- ETAPE 4 : DEPLOIEMENT DU FRONTEND ---
         stage('Deploy Frontend') {
             steps {
                 script {
@@ -132,7 +131,7 @@ pipeline {
                     sh "docker stop ${CLIENT_IMAGE} || true"
                     sh "docker rm ${CLIENT_IMAGE} || true"
                     
-                    // Remplace 'peps-game.duckdns.org' par TON VRAI DOMAINE partout ci-dessous 👇
+                    // Assure-toi que les chemins SSL sont bons sur ton VPS
                     sh """
                         docker run -d \
                         --name ${CLIENT_IMAGE} \
@@ -150,10 +149,8 @@ pipeline {
         }
     }
 
-    // --- NETTOYAGE APRES COUP ---
     post {
         always {
-            // Nettoie les images "dangling" (les vieilles versions inutiles) pour ne pas saturer le disque
             sh "docker image prune -f"
         }
         success {
