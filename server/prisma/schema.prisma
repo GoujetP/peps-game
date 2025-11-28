@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id           String   @id @default(uuid()) // L'ID de la salle (ex: code à partager)
+  hostSocketId String?  // Socket ID de l'hôte pour vérifier ses droits
+  isGameActive Boolean  @default(false)
+  buzzLocked   Boolean  @default(false)      // Si true, personne ne peut buzzer
+  buzzedPlayer String?  // Nom ou ID du joueur qui a buzzé en premier
+  createdAt    DateTime @default(now())
+  
+  players      Player[]
+}
+
+model Player {
+  id        String @id @default(uuid())
+  socketId  String @unique // Pour identifier la connexion websocket
+  name      String
+  roomId    String
+  room      Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
