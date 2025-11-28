@@ -1,7 +1,10 @@
 # 1. On part d'une image Node
 FROM node:20-alpine
 
-# 2. On crée le dossier de travail
+# 2. Installer les dépendances système (OpenSSL pour Prisma)
+RUN apk add --no-cache openssl
+
+# 3. On crée le dossier de travail
 WORKDIR /app
 
 # 3. On copie les dépendances et on installe
