@@ -88,11 +88,17 @@ pipeline {
                     echo '🚀 Déploiement Server...'
                     sh "docker stop ${SERVER_IMAGE} || true"
                     sh "docker rm ${SERVER_IMAGE} || true"
-                    sh """
-                        docker run -d --name ${SERVER_IMAGE} \
-                        --network ${NETWORK_NAME} --restart unless-stopped \
-                        -p ${SERVER_PORT}:3000 ${SERVER_IMAGE}
-                    """
+                    
+                    // Récupérer les credentials depuis Jenkins
+                    withCredentials([string(credentialsId: 'database-url', variable: 'DATABASE_URL')]) {
+                        sh """
+                            docker run -d --name ${SERVER_IMAGE} \
+                            --network ${NETWORK_NAME} --restart unless-stopped \
+                            -p ${SERVER_PORT}:3000 \
+                            -e DATABASE_URL="${DATABASE_URL}" \
+                            ${SERVER_IMAGE}
+                        """
+                    }
                 }
             }
         }
