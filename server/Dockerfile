@@ -8,6 +8,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
+# 3.5. On copie Prisma et on génère les types
+COPY prisma ./prisma
+RUN npx prisma generate
+
 # 4. On copie le reste du code
 COPY . .
 
