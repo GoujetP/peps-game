@@ -18,7 +18,8 @@ const jwtExpiresIn: string | number = (() => {
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET,
+      global: true,
+      secret: process.env.JWT_SECRET || 'lejeudepepsbite',
       signOptions: { expiresIn: jwtExpiresIn as unknown as any },
     }),
   ],

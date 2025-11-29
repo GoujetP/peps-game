@@ -18,7 +18,7 @@ pipeline {
 
     stages {
         // --------------------------------------------------------
-        // BACKEND : ANALYSE + VERIFICATION MANUELLE
+        // BACKEND : ANALYSE
         // --------------------------------------------------------
         stage('SonarQube Analysis - Server') {
             steps {
@@ -44,26 +44,21 @@ pipeline {
         stage('Quality Gate - Server (Check API)') {
             steps {
                 script {
-                    echo '⏳ Attente de la fin du calcul SonarCloud (10s)...'
-                    sleep 10 // On laisse le temps à Sonar de calculer
-                    
-                    // On interroge l'API avec ton token stocké dans Jenkins
+                    echo '⏳ Attente du calcul SonarCloud (10s)...'
+                    sleep 10
                     withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
-                        // On demande le statut du projet
                         def result = sh(script: """
                             curl -s -u "${SONAR_TOKEN}:" \
                             "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY_SERVER}&branch=main"
                         """, returnStdout: true).trim()
                         
                         echo "🔍 Réponse SonarCloud : ${result}"
-                        
-                        // On vérifie si ça contient "OK"
                         if (result.contains('"status":"OK"')) {
                             echo "✅ Quality Gate SERVER : VALIDÉ"
                         } else if (result.contains('"status":"ERROR"')) {
-                            error "❌ Quality Gate SERVER : ÉCHEC (Code de mauvaise qualité)"
+                            error "❌ Quality Gate SERVER : ÉCHEC"
                         } else {
-                            echo "⚠️ Statut inconnu ou en cours, on continue quand même pour ce TP..."
+                            echo "⚠️ Statut inconnu, on continue..."
                         }
                     }
                 }
@@ -89,13 +84,17 @@ pipeline {
                     sh "docker stop ${SERVER_IMAGE} || true"
                     sh "docker rm ${SERVER_IMAGE} || true"
                     
-                    // Récupérer les credentials depuis Jenkins
-                    withCredentials([string(credentialsId: 'database-url', variable: 'DATABASE_URL')]) {
+                    // --- CORRECTION ICI : Injection de DATABASE_URL ET JWT_SECRET ---
+                    withCredentials([
+                        string(credentialsId: 'database-url', variable: 'DB_URL'),
+                        string(credentialsId: 'jwt-secret', variable: 'JWT_KEY') // On récupère la clé depuis Jenkins
+                    ]) {
                         sh """
                             docker run -d --name ${SERVER_IMAGE} \
                             --network ${NETWORK_NAME} --restart unless-stopped \
                             -p ${SERVER_PORT}:3000 \
-                            -e DATABASE_URL="${DATABASE_URL}" \
+                            -e DATABASE_URL='${DB_URL}' \
+                            -e JWT_SECRET='${JWT_KEY}' \
                             ${SERVER_IMAGE}
                         """
                     }
@@ -104,7 +103,7 @@ pipeline {
         }
 
         // --------------------------------------------------------
-        // FRONTEND : ANALYSE + VERIFICATION MANUELLE
+        // FRONTEND : ANALYSE
         // --------------------------------------------------------
         stage('SonarQube Analysis - Client') {
             steps {
@@ -138,7 +137,6 @@ pipeline {
                         """, returnStdout: true).trim()
                         
                         echo "🔍 Réponse SonarCloud : ${result}"
-                        
                         if (result.contains('"status":"OK"')) {
                             echo "✅ Quality Gate CLIENT : VALIDÉ"
                         } else if (result.contains('"status":"ERROR"')) {
@@ -184,12 +182,6 @@ pipeline {
     post {
         always {
             sh "docker image prune -f"
-        }
-        success {
-            echo '✅ Déploiement complet terminé avec succès !'
-        }
-        failure {
-            echo '❌ Le déploiement a échoué.'
         }
     }
 }
