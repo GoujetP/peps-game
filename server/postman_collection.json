@@ -1,0 +1,93 @@
+{
+  "info": {
+    "_postman_id": "peps-game-collection",
+    "name": "peps-game API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection pour tester les endpoints HTTP du backend peps-game.\nVariables: {{baseUrl}} (ex: http://localhost:3000), {{wsUrl}} (ex: ws://localhost:3000)"
+  },
+  "item": [
+    {
+      "name": "Auth - Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"alice@example.com\",\n  \"password\": \"Password123!\",\n  \"username\": \"alice\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth","register"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Auth - Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"alice@example.com\",\n  \"password\": \"Password123!\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth","login"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Buzzer - List Rooms",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/buzzer/rooms",
+          "host": ["{{baseUrl}}"],
+          "path": ["buzzer","rooms"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Buzzer - Get Room By Code",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/buzzer/rooms/code/{{roomCode}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["buzzer","rooms","code","{{roomCode}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "WS - Instructions (create/join/buzz)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{wsUrl}}/",
+          "host": ["{{wsUrl}}"],
+          "path": ["/"]
+        },
+        "description": "Postman WebSocket client can be utilisé pour se connecter à {{wsUrl}} (ex: ws://localhost:3000).\n\nExemples d'événements socket.io (envoyer comme messages JSON via un client socket.io ou via un helper):\n1) createGame: { \"event\": \"createGame\", \"data\": { \"userId\": \"<USER_ID>\" } }\n2) joinGame: { \"event\": \"joinGame\", \"data\": { \"roomCode\": \"ABC123\", \"userId\": \"<USER_ID>\", \"username\": \"alice\" } }\n3) buzz: { \"event\": \"buzz\" }\n4) resetRound: { \"event\": \"resetRound\", \"data\": { \"roomId\": \"<ROOM_ID>\" } }\n5) kickPlayer: { \"event\": \"kickPlayer\", \"data\": { \"playerId\": \"<PLAYER_ID>\" } }"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "wsUrl", "value": "ws://localhost:3000" },
+    { "key": "roomCode", "value": "ABC123" }
+  ]
+}

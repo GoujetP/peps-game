@@ -7,6 +7,7 @@ dotenv.config({ path: resolve(process.cwd(), '.env') , override: true });
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   // DEBUG : On vérifie immédiatement si la variable est là
@@ -20,6 +21,8 @@ async function bootstrap() {
   
   // Active les CORS pour que ton frontend (React/Vue/etc) puisse se connecter
   app.enableCors();
+  // Validation globale des DTOs
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   
   await app.listen(3000);
   console.log(`Application is running on: ${await app.getUrl()}`);
