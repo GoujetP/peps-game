@@ -4,31 +4,47 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class BuzzerService {
-  // On injecte PrismaService ici. NestJS attendra que l'app soit prête (et le .env chargé)
   constructor(private prisma: PrismaService) {}
 
-  // --- MÉTHODES POUR LE CONTROLLER HTTP ---
+  private generateRoomCode(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
 
   async getAllRooms() {
-    // On utilise "this.prisma" au lieu de "prisma"
     return await this.prisma.room.findMany({
-      include: { _count: { select: { players: true } } },
-      orderBy: { createdAt: 'desc' }
+      include: { 
+        _count: { select: { players: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getRoomById(roomId: string) {
+  async getRoomByCode(code: string) {
     return await this.prisma.room.findUnique({
-      where: { id: roomId },
-      include: { players: true }
+      where: { code },
+      include: { players: true },
     });
   }
 
-  // --- MÉTHODES POUR LE JEU (WEBSOCKETS) ---
+  async createRoom(client: Socket, userId: string) {
+    let code: string = '';
+    let isUnique = false;
 
-  async createRoom(client: Socket, hostName: string) {
+    // Générer un code unique
+    while (!isUnique) {
+      code = this.generateRoomCode();
+      const existing = await this.prisma.room.findUnique({ where: { code } });
+      if (!existing) isUnique = true;
+    }
+
     const room = await this.prisma.room.create({
       data: {
+        code,
         hostSocketId: client.id,
         isGameActive: false,
       },
@@ -36,15 +52,24 @@ export class BuzzerService {
     return room;
   }
 
-  async joinRoom(client: Socket, roomId: string, playerName: string) {
-    const room = await this.prisma.room.findUnique({ where: { id: roomId } });
+  async joinRoom(client: Socket, code: string, userId: string, username: string) {
+    const room = await this.prisma.room.findUnique({ where: { code } });
     if (!room) throw new Error('Salle introuvable');
+
+    // Vérifier la limite de 16 joueurs
+    const playerCount = await this.prisma.player.count({
+      where: { roomId: room.id },
+    });
+    if (playerCount >= 16) {
+      throw new Error('La salle est pleine (16 joueurs max)');
+    }
 
     const player = await this.prisma.player.create({
       data: {
         socketId: client.id,
-        name: playerName,
+        name: username,
         roomId: room.id,
+        userId,
       },
     });
 
@@ -90,7 +115,7 @@ export class BuzzerService {
 
   async resetRound(hostSocketId: string, roomId: string) {
     const room = await this.prisma.room.findUnique({ where: { id: roomId } });
-    
+
     if (!room || room.hostSocketId !== hostSocketId) {
       throw new Error('Non autorisé');
     }
@@ -108,7 +133,9 @@ export class BuzzerService {
   }
 
   async handleDisconnect(client: Socket) {
-    const player = await this.prisma.player.findUnique({ where: { socketId: client.id } });
+    const player = await this.prisma.player.findUnique({ 
+      where: { socketId: client.id } 
+    });
     if (player) {
       await this.prisma.player.delete({ where: { id: player.id } });
       return { roomId: player.roomId, name: player.name };

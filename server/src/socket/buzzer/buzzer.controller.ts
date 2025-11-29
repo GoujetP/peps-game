@@ -1,20 +1,21 @@
-import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Param, NotFoundException, UseGuards, Request } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { BuzzerService } from './buzzer.service';
 
 @Controller('buzzer')
 export class BuzzerController {
   constructor(private readonly buzzerService: BuzzerService) {}
 
-  // GET /buzzer/rooms -> Liste toutes les salles
   @Get('rooms')
+  @UseGuards(AuthGuard('jwt'))
   async getAllRooms() {
     return this.buzzerService.getAllRooms();
   }
 
-  // GET /buzzer/rooms/:id -> Détail d'une salle (joueurs, état du buzz, etc.)
-  @Get('rooms/:id')
-  async getRoom(@Param('id') id: string) {
-    const room = await this.buzzerService.getRoomById(id);
+  @Get('rooms/code/:code')
+  @UseGuards(AuthGuard('jwt'))
+  async getRoomByCode(@Param('code') code: string) {
+    const room = await this.buzzerService.getRoomByCode(code);
     if (!room) {
       throw new NotFoundException('Salle introuvable');
     }
